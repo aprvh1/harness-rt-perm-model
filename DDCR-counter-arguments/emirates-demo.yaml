@@ -1,0 +1,338 @@
+---
+# ==========================================
+# NAMESPACE: wm-1
+# ==========================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nginx-sa-wm1
+  namespace: wm-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: wm-1
+  labels:
+    app: nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: nginx-sa-wm1
+      containers:
+      - name: nginx
+        image: nginx:stable-alpine
+        ports:
+        - containerPort: 80
+---
+# Dedicated SA for the transient chaos runner pod (Namespace Specific)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wm-1-chaos-runner-sa
+  namespace: wm-1
+---
+# Tailored Role for the native Harness V2 Chaos Runner (With deletecollection enabled)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-chaos-execution-role
+  namespace: wm-1
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "pods/log"
+      - "jobs"           
+      - "deployments"    
+      - "replicasets"
+      - "services"
+      - "configmaps"     
+      - "secrets"        
+      - "events"
+      - "namespaces"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-chaos-execution-binding
+  namespace: wm-1
+subjects:
+  - kind: ServiceAccount
+    name: wm-1-chaos-runner-sa
+    namespace: wm-1
+roleRef:
+  kind: Role
+  name: harness-chaos-execution-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 3. Role for the central Account-Scoped Delegate to launch infrastructure in wm-1
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-delegate-launcher-role
+  namespace: wm-1
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "jobs"
+      - "deployments"
+      - "replicasets"
+      - "services"
+      - "configmaps"
+      - "secrets"
+      - "events"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"] # Allows delegate to inspect/interact with the target chaos runner SA
+    verbs: ["get", "list", "watch"]
+---
+# 4. Cross-namespace binding linking the central delegate to the local wm-1 launcher role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-delegate-launcher-binding
+  namespace: wm-1
+subjects:
+  - kind: ServiceAccount
+    name: chaos-delegate-sa
+    namespace: harness-delegate-ng-animesh # Points back to your fresh Helm hub namespace
+roleRef:
+  kind: Role
+  name: harness-delegate-launcher-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ==========================================
+# NAMESPACE: wm-2
+# ==========================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nginx-sa-wm2
+  namespace: wm-2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: wm-2
+  labels:
+    app: nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: nginx-sa-wm2
+      containers:
+      - name: nginx
+        image: nginx:stable-alpine
+        ports:
+        - containerPort: 80
+---
+# Dedicated SA for the transient chaos runner pod (Namespace Specific)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wm-2-chaos-runner-sa
+  namespace: wm-2
+---
+# Tailored Role for the native Harness V2 Chaos Runner (With deletecollection enabled)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-chaos-execution-role
+  namespace: wm-2
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "pods/log"
+      - "jobs"
+      - "deployments"
+      - "replicasets"
+      - "services"
+      - "configmaps"
+      - "secrets"
+      - "events"
+      - "namespaces"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-chaos-execution-binding
+  namespace: wm-2
+subjects:
+  - kind: ServiceAccount
+    name: wm-2-chaos-runner-sa
+    namespace: wm-2
+roleRef:
+  kind: Role
+  name: harness-chaos-execution-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 3. Role for the central Account-Scoped Delegate to launch infrastructure in wm-2
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-delegate-launcher-role
+  namespace: wm-2
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "jobs"
+      - "deployments"
+      - "replicasets"
+      - "services"
+      - "configmaps"
+      - "secrets"
+      - "events"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+---
+# 4. Cross-namespace binding linking the central delegate to the local wm-2 launcher role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-delegate-launcher-binding
+  namespace: wm-2
+subjects:
+  - kind: ServiceAccount
+    name: chaos-delegate-sa
+    namespace: harness-delegate-ng-animesh
+roleRef:
+  kind: Role
+  name: harness-delegate-launcher-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ==========================================
+# NAMESPACE: wm-3
+# ==========================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nginx-sa-wm3
+  namespace: wm-3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: wm-3
+  labels:
+    app: nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: nginx-sa-wm3
+      containers:
+      - name: nginx
+        image: nginx:stable-alpine
+        ports:
+        - containerPort: 80
+---
+# Dedicated SA for the transient chaos runner pod (Namespace Specific)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wm-3-chaos-runner-sa
+  namespace: wm-3
+---
+# Tailored Role for the native Harness V2 Chaos Runner (With deletecollection enabled)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-chaos-execution-role
+  namespace: wm-3
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "pods/log"
+      - "jobs"
+      - "deployments"
+      - "replicasets"
+      - "services"
+      - "configmaps"
+      - "secrets"
+      - "events"
+      - "namespaces"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-chaos-execution-binding
+  namespace: wm-3
+subjects:
+  - kind: ServiceAccount
+    name: wm-3-chaos-runner-sa
+    namespace: wm-3
+roleRef:
+  kind: Role
+  name: harness-chaos-execution-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 3. Role for the central Account-Scoped Delegate to launch infrastructure in wm-3
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harness-delegate-launcher-role
+  namespace: wm-3
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: 
+      - "pods"
+      - "jobs"
+      - "deployments"
+      - "replicasets"
+      - "services"
+      - "configmaps"
+      - "secrets"
+      - "events"
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+---
+# 4. Cross-namespace binding linking the central delegate to the local wm-3 launcher role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harness-delegate-launcher-binding
+  namespace: wm-3
+subjects:
+  - kind: ServiceAccount
+    name: chaos-delegate-sa
+    namespace: harness-delegate-ng-animesh
+roleRef:
+  kind: Role
+  name: harness-delegate-launcher-role
+  apiGroup: rbac.authorization.k8s.io
